@@ -38,7 +38,7 @@ resolver: lts-7.15
 packages:
 - '.'
 - location:
-    git: git@github.com:bigmac2k/HSMateLight.git
+    git: https://github.com/bigmac2k/HSMateLight.git
     commit: e52b4e5a0817c81c52b1cfae86b90e255cb312b7
   extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
