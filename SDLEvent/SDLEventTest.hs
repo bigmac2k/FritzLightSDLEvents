@@ -40,4 +40,4 @@ dim = (30, 12)
 main :: IO ()
 main = do
     showSDLControlWindow
-    Sock.withSocketsDo $ runMateM (Config (fromJust $ parseAddress "134.28.70.172") 1337 dim (Just 33000) True [sdlKeyEventProvider]) eventTest (0,0)
+    Sock.withSocketsDo $ runMateM (Config (fromJust $ parseAddress "127.0.0.1") 1337 dim (Just 33000) True [sdlKeyEventProvider]) eventTest (0,0)
