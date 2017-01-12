@@ -98,7 +98,7 @@ sdlKeyEventGen channel internKeyState startTime = do
     let newKeyState = KeyState {pressed=(pressedI newInternKeyState), released=(releasedI newInternKeyState), held=(map (\(key,start,dur) -> (key,dur)) (heldI newInternKeyState))}
         quit = ((map (\(key,_) -> key) (pressed newKeyState)) == ["ESC"]) && ("L-SHIFT" `elem` (map (\(key,_) -> key) (held newKeyState)))
 
-    putStrLn $ show newKeyState
+    {-putStrLn $ show newKeyState-}
     atomically $ writeTChan channel $ EventT "SDL_KEY_DATA" newKeyState
     threadDelay 33000
     unless quit (sdlKeyEventGen channel newInternKeyState startTime)
