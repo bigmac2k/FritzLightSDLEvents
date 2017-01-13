@@ -68,17 +68,59 @@ sdlKeyEventGen channel internKeyState startTime = do
                         let scanCode = SDL.keysymScancode $ SDL.keyboardEventKeysym keyboardEvent
                             keyCode = SDL.keysymKeycode $ SDL.keyboardEventKeysym keyboardEvent                            
                             keyNum = fromIntegral $ unwrapKeycode $ keyCode
-                            key | (keyNum >= 65 && keyNum <= 90) || (keyNum >= 97 && keyNum <= 122) = [(chr $ keyNum)]
-                                | (keyNum >= 48 && keyNum <= 57) = show(keyNum-48)
+                            key | (keyNum >= 0x61 && keyNum <= 0x7A) = [chr $ 0x41 + (keyNum-0x61)]
+                                | (keyNum >= 0x30 && keyNum <= 0x39) = show(keyNum-48)
+                                | (keyNum >= 0x4000003A && keyNum <= 0x40000045) = "F" ++ (show (keyNum-0x4000003A+1))
                                 | keyCode == SDL.KeycodeLCtrl = "L-CTRL"
                                 | keyCode == SDL.KeycodeRCtrl = "R-CTRL"
                                 | keyCode == SDL.KeycodeLShift = "L-SHIFT"
                                 | keyCode == SDL.KeycodeRShift = "R-SHIFT"
+                                | keyCode == SDL.KeycodeCapsLock = "CAPS_LOCK"
+                                | keyCode == SDL.KeycodeTab = "TAB"
+                                | keyCode == SDL.KeycodeBackspace = "BACKSPACE"
+                                | keyCode == SDL.KeycodeLGUI = "L-GUI"
+                                | keyCode == SDL.KeycodeRGUI = "R-GUI"
+                                | keyCode == SDL.KeycodeMode = "MODE"
                                 | keyCode == SDL.KeycodeLAlt = "L-ALT"
                                 | keyCode == SDL.KeycodeRAlt = "R-ALT"
                                 | keyCode == SDL.KeycodeReturn = "RETURN"
                                 | keyCode == SDL.KeycodeSpace = "SPACE"
                                 | keyCode == SDL.KeycodeEscape = "ESC"
+                                | keyCode == SDL.KeycodeKPMultiply = "NUM_MULTIPLY"
+                                | keyCode == SDL.KeycodeKPDivide = "NUM_DIVIDE"
+                                | keyCode == SDL.KeycodeKPMinus = "NUM_MINUS"
+                                | keyCode == SDL.KeycodeKPPlus = "NUM_PLUS"
+                                | keyCode == SDL.KeycodeKPEnter = "NUM_ENTER"
+                                | keyCode == SDL.KeycodeKPComma = "NUM_COMMA"
+                                | keyCode == SDL.KeycodeKPEnter = "NUM_ENTER"
+                                | keyCode == SDL.KeycodeKP0 = "NUM_0"
+                                | (keyNum >= 0x40000059 && keyNum <= 0x40000061) = "NUM_" ++ (show (keyNum-0x40000059+1))
+                                | keyCode == SDL.KeycodePause = "BREAK"
+                                | keyCode == SDL.KeycodeInsert = "INSERT"
+                                | keyCode == SDL.KeycodeDelete = "DELETE"
+                                | keyCode == SDL.KeycodeComma = "COMMA"
+                                | keyCode == SDL.KeycodeSemicolon = "SEMICOLON"
+                                | keyCode == SDL.KeycodePeriod = "PERIOD"
+                                | keyCode == SDL.KeycodeColon = "COLON"
+                                | keyCode == SDL.KeycodeLess = "LESS"
+                                | keyCode == SDL.KeycodeMinus = "MINUS"
+                                | keyCode == SDL.KeycodeHash = "HASH"
+                                | keyCode == SDL.KeycodePlus = "PLUS"
+                                | keyCode == SDL.KeycodeSlash = "SLASH"
+                                | keyCode == SDL.KeycodeBackslash = "BACKSLASH"
+                                | keyCode == SDL.KeycodeQuote = "GRAVE"
+                                | keyCode == SDL.KeycodeBackquote = "CARET"
+                                | keyCode == SDL.KeycodePrintScreen = "PRINT"
+                                | keyCode == SDL.KeycodePageUp = "PAGE_UP"
+                                | keyCode == SDL.KeycodePageDown = "PAGE_DOWN"
+                                | keyCode == SDL.KeycodeEnd = "END"
+                                | keyCode == SDL.KeycodeHome = "HOME"
+                                | keyCode == SDL.KeycodeUp = "UP"
+                                | keyCode == SDL.KeycodeDown = "DOWN"
+                                | keyCode == SDL.KeycodeLeft = "LEFT"
+                                | keyCode == SDL.KeycodeRight = "RIGHT"
+                                | keyCode == SDL.KeycodeNumLockClear = "NUM_LOCK"
+                                | keyCode == SDL.KeycodeScrollLock = "SCROLL_LOCK"
                                 | otherwise = "" in
                         (key, if pressed then True else False)
                     else ("", True)
@@ -98,7 +140,7 @@ sdlKeyEventGen channel internKeyState startTime = do
     let newKeyState = KeyState {pressed=(pressedI newInternKeyState), released=(releasedI newInternKeyState), held=(map (\(key,start,dur) -> (key,dur)) (heldI newInternKeyState))}
         quit = ((map (\(key,_) -> key) (pressed newKeyState)) == ["ESC"]) && ("L-SHIFT" `elem` (map (\(key,_) -> key) (held newKeyState)))
 
-    {-putStrLn $ show newKeyState-}
+    --putStrLn $ show newKeyState
     atomically $ writeTChan channel $ EventT "SDL_KEY_DATA" newKeyState
     threadDelay 33000
     unless quit (sdlKeyEventGen channel newInternKeyState startTime)
