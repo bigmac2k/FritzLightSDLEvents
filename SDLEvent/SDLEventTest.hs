@@ -12,14 +12,14 @@ import qualified Network.Socket as Sock
 type KeyStatus = (String, String, Integer) -- Represents the tuple (KeyStatusString, KeyNameString, Time) 
 
 move :: (Int, Int) -> KeyStatus -> (Int, Int) -> (Int, Int)
-move (xdim, ydim) ("Pressed","w",_) (x,y) = (x, (y - 1) `mod` ydim)
-move (xdim, ydim) ("Held","w",dur) (x,y) = if dur >= 100 then (x, (y - 1) `mod` ydim) else (x,y)
-move (xdim, ydim) ("Pressed","a",_) (x,y) = ((x - 1) `mod` xdim, y)
-move (xdim, ydim) ("Held","a",dur) (x,y) = if dur >= 100 then ((x - 1) `mod` xdim, y) else (x,y)
-move (xdim, ydim) ("Pressed","s",_) (x,y) = (x, (y + 1) `mod` ydim)
-move (xdim, ydim) ("Held","s",dur) (x,y) = if dur >= 100 then (x, (y + 1) `mod` ydim) else (x,y)
-move (xdim, ydim) ("Pressed","d",_) (x,y) = ((x + 1) `mod` xdim, y)
-move (xdim, ydim) ("Held","d",dur) (x,y) = if dur >= 100 then ((x + 1) `mod` xdim, y) else (x,y)
+move (xdim, ydim) ("Pressed","W",_) (x,y) = (x, (y - 1) `mod` ydim)
+move (xdim, ydim) ("Held","W",dur) (x,y) = if dur >= 100 then (x, (y - 1) `mod` ydim) else (x,y)
+move (xdim, ydim) ("Pressed","A",_) (x,y) = ((x - 1) `mod` xdim, y)
+move (xdim, ydim) ("Held","A",dur) (x,y) = if dur >= 100 then ((x - 1) `mod` xdim, y) else (x,y)
+move (xdim, ydim) ("Pressed","S",_) (x,y) = (x, (y + 1) `mod` ydim)
+move (xdim, ydim) ("Held","S",dur) (x,y) = if dur >= 100 then (x, (y + 1) `mod` ydim) else (x,y)
+move (xdim, ydim) ("Pressed","D",_) (x,y) = ((x + 1) `mod` xdim, y)
+move (xdim, ydim) ("Held","D",dur) (x,y) = if dur >= 100 then ((x + 1) `mod` xdim, y) else (x,y)
 move _ _ (x,y) = (x,y)
 
 toFrame :: (Int, Int) -> (Int, Int) -> ListFrame
