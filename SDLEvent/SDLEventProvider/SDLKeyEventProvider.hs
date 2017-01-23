@@ -6,6 +6,7 @@ import Network.MateLight.Simple
 import Network.MateLight
 import qualified SDL
 import SDL.Input.Keyboard as SDLKeys
+import SDL.Input.Joystick as SDLJoystick
 import SDL.Input.Keyboard.Codes as SDLKeyCodes
 
 import Control.Concurrent
@@ -19,8 +20,7 @@ import Data.Time.Clock
 import Data.Time.LocalTime
 import Data.Char
 import Data.List
-
---data KeyState = Pressed String Integer | Held String Integer | Released String Integer
+import qualified Data.Vector
 
 data KeyState = KeyState {
      pressed :: [(String, Integer)]
@@ -32,6 +32,18 @@ data InternalKeyState = InternalKeyState {
      pressedI :: [(String, Integer)]
     ,heldI :: [(String, Integer, Integer)]
     ,releasedI :: [(String, Integer)]
+    } deriving (Read, Show)
+
+data ButtonState = ButtonState {
+     pressedB :: [(String, Integer)]
+    ,heldB :: [(String, Integer)]
+    ,releasedB :: [(String, Integer)]
+    } deriving (Read, Show)
+    
+data InternalButtonState = InternalButtonState {
+     pressedBI :: [(String, Integer)]
+    ,heldBI :: [(String, Integer, Integer)]
+    ,releasedBI :: [(String, Integer)]
     } deriving (Read, Show)
 
 -----------------------------------------------------
@@ -47,6 +59,51 @@ showSDLControlWindow = do
     SDL.present renderer
     return window
 
+sdlJoystickEventProvider :: TChan EventT -> IO ()
+sdlJoystickEventProvider channel = do 
+    startTime <- getCurrentTime
+    joysticks <- SDLJoystick.availableJoysticks
+    joystick <- SDLJoystick.openJoystick ((Data.Vector.!) joysticks 0)
+    putStrLn $ show (length joysticks) ++ " joystick(s) found."
+    buttonCount <- SDLJoystick.numButtons joystick
+    putStrLn $ "The joystick has " ++ (show $ buttonCount) ++ " buttons."
+    axisCount <- SDLJoystick.numAxes joystick
+    putStrLn $ "The joystick has " ++ (show $ axisCount) ++ " axes."
+    ballCount <- SDLJoystick.numBalls joystick
+    putStrLn $ "The joystick has " ++ (show $ ballCount) ++ " balls."
+    sdlJoystickEventGen channel (InternalButtonState [] [] []) startTime joystick
+    
+sdlJoystickEventGen :: TChan EventT -> InternalButtonState -> UTCTime -> Joystick -> IO ()
+sdlJoystickEventGen channel internButtonState startTime joystick = do
+    time <- getCurrentTime
+    let timeMillis = round (realToFrac ((diffUTCTime time startTime) * 1000) :: Float) :: Integer
+    buttonCount <- SDLJoystick.numButtons joystick
+    pressedButtonBools <- mapM (\buttonNum -> SDLJoystick.buttonPressed joystick buttonNum) $ [0..buttonCount-1]
+    axisCount <- SDLJoystick.numAxes joystick
+    axisValues <- mapM (\axisNum -> SDLJoystick.axisPosition joystick axisNum) $ [0..axisCount-1]
+    let pressedButtonBoolsExt = pressedButtonBools ++ [(axisValues!!1) < 0, (axisValues!!1) > 0, (axisValues!!0) < 0, (axisValues!!0) > 0]
+        buttons = ["A", "B", "X", "Y", "L", "R", "SELECT", "START", "UP", "DOWN", "LEFT", "RIGHT"]
+        zippedButtonBools = zip buttons pressedButtonBoolsExt  
+        newInternButtonState = InternalButtonState {pressedBI=pK, heldBI=hK, releasedBI=rK} 
+                                where (pK2, rK2) = foldr (\key (accP, accR) -> case key of {(k,True) -> ((k,timeMillis) : accP, accR); 
+                                                                                            (k,False) -> (accP, (k,timeMillis) : accR)}) ([],[]) zippedButtonBools
+                                      pKolds = map (\(key,time) -> key) (pressedBI internButtonState)
+                                      rKolds = map (\(key,time) -> key) (releasedBI internButtonState)
+                                      hKolds = map (\(key,time,dur) -> key) (heldBI internButtonState)
+                                      rK = filter (\(key,start) -> (key `elem` hKolds) || (key `elem` pKolds)) rK2
+                                      rKs = map (\(key,time) -> key) rK
+                                      hK = nub $ (map (\(key,start,dur) -> (key,start,(timeMillis-start))) (filter (\(key,start,dur) -> not $ key `elem` rKs) (heldBI internButtonState))) ++ 
+                                                 (map (\(key,tStart) -> (key, timeMillis, 0)) (filter (\(key,tStart) -> not $ key `elem` (rKolds++rKs)) (pressedBI internButtonState)))
+                                      hKs = map (\(key,time,dur) -> key) hK
+                                      pK = filter (\(key,tStart) -> not $ key `elem` (hKolds++hKs)) pK2
+        newButtonState = ButtonState {pressedB=(pressedBI newInternButtonState), releasedB=(releasedBI newInternButtonState), heldB=(map (\(key,start,dur) -> (key,dur)) (heldBI newInternButtonState))}
+        quit = all (\button -> button `elem` (map (\(b,_) -> b) (pressedB newButtonState))) ["A","B","L","R"]
+    
+    atomically $ writeTChan channel $ EventT "SDL_JOYSTICK_DATA" newButtonState
+    threadDelay 33000
+    unless quit (sdlJoystickEventGen channel newInternButtonState startTime joystick)
+    
+    
 sdlKeyEventProvider :: TChan EventT -> IO ()
 sdlKeyEventProvider channel = do 
     startTime <- getCurrentTime
@@ -140,7 +197,6 @@ sdlKeyEventGen channel internKeyState startTime = do
     let newKeyState = KeyState {pressed=(pressedI newInternKeyState), released=(releasedI newInternKeyState), held=(map (\(key,start,dur) -> (key,dur)) (heldI newInternKeyState))}
         quit = ((map (\(key,_) -> key) (pressed newKeyState)) == ["ESC"]) && ("L-SHIFT" `elem` (map (\(key,_) -> key) (held newKeyState)))
 
-    --putStrLn $ show newKeyState
-    atomically $ writeTChan channel $ EventT "SDL_KEY_DATA" newKeyState
+    atomically $ writeTChan channel $ EventT "SDL_KEY_DATA" $ newKeyState
     threadDelay 33000
     unless quit (sdlKeyEventGen channel newInternKeyState startTime)
