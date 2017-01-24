@@ -15,11 +15,14 @@ import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Monad.Loops
+import Control.Monad
 
 import Data.Time.Clock
 import Data.Time.LocalTime
 import Data.Char
 import Data.List
+import Data.Foldable
 import qualified Data.Vector
 
 data KeyState = KeyState {
@@ -62,29 +65,39 @@ showSDLControlWindow = do
 sdlJoystickEventProvider :: TChan EventT -> IO ()
 sdlJoystickEventProvider channel = do 
     startTime <- getCurrentTime
-    joysticks <- SDLJoystick.availableJoysticks
-    joystick <- SDLJoystick.openJoystick ((Data.Vector.!) joysticks 0)
-    putStrLn $ show (length joysticks) ++ " joystick(s) found."
-    buttonCount <- SDLJoystick.numButtons joystick
-    putStrLn $ "The joystick has " ++ (show $ buttonCount) ++ " buttons."
-    axisCount <- SDLJoystick.numAxes joystick
-    putStrLn $ "The joystick has " ++ (show $ axisCount) ++ " axes."
-    ballCount <- SDLJoystick.numBalls joystick
-    putStrLn $ "The joystick has " ++ (show $ ballCount) ++ " balls."
-    sdlJoystickEventGen channel (InternalButtonState [] [] []) startTime joystick
-    
-sdlJoystickEventGen :: TChan EventT -> InternalButtonState -> UTCTime -> Joystick -> IO ()
-sdlJoystickEventGen channel internButtonState startTime joystick = do
-    time <- getCurrentTime
-    let timeMillis = round (realToFrac ((diffUTCTime time startTime) * 1000) :: Float) :: Integer
+    joystickCount <- SDLJoystick.numJoysticks
+    mPutStrLn $ (show $ joystickCount) ++ " joystick(s) found."
+    joystickDevices <- SDLJoystick.availableJoysticks
+    joysticks <- mapM (\jStickNum -> SDLJoystick.openJoystick ((Data.Vector.!) joystickDevices jStickNum)) [0..(length joystickDevices)-1]
+    forM_ [0..(length joystickDevices)-1] $ \n -> do
+        let joystick = joysticks!!n
+        buttonCount <- SDLJoystick.numButtons joystick
+        mPutStrLn $ "Joystick " ++ (show n) ++ " has " ++ (show $ buttonCount) ++ " buttons."
+        axisCount <- SDLJoystick.numAxes joystick
+        mPutStrLn $ "Joystick " ++ (show n) ++ " has " ++ (show $ axisCount) ++ " axes."
+        ballCount <- SDLJoystick.numBalls joystick
+        mPutStrLn $ "Joystick " ++ (show n) ++ " has " ++ (show $ ballCount) ++ " balls."
+    sdlJoystickEventGen channel (InternalButtonState [] [] []) startTime joysticks
+
+sdlGetJoystickButtonData :: Joystick -> Int -> IO [(String,Bool)]
+sdlGetJoystickButtonData joystick id = do
     buttonCount <- SDLJoystick.numButtons joystick
     pressedButtonBools <- mapM (\buttonNum -> SDLJoystick.buttonPressed joystick buttonNum) $ [0..buttonCount-1]
     axisCount <- SDLJoystick.numAxes joystick
     axisValues <- mapM (\axisNum -> SDLJoystick.axisPosition joystick axisNum) $ [0..axisCount-1]
-    let pressedButtonBoolsExt = pressedButtonBools ++ [(axisValues!!1) < 0, (axisValues!!1) > 0, (axisValues!!0) < 0, (axisValues!!0) > 0]
-        buttons = ["A", "B", "X", "Y", "L", "R", "SELECT", "START", "UP", "DOWN", "LEFT", "RIGHT"]
-        zippedButtonBools = zip buttons pressedButtonBoolsExt  
-        newInternButtonState = InternalButtonState {pressedBI=pK, heldBI=hK, releasedBI=rK} 
+    pressedAxisBools <- foldM (\acc num -> return (acc ++ [(axisValues!!num) < 0, (axisValues!!num) > 0])) [] [0..(length axisValues)-1]
+    let zippedButtonBools = zip (map (\b -> "P" ++ (show id) ++ "_Button_" ++ (show b)) [0..buttonCount-1]) pressedButtonBools
+        zippedAxisBools = zip (map (\(ax, dir) -> "P" ++ (show id) ++ "_Axis_" ++ (show ax) ++ "_D" ++ (show dir)) (zip (concatMap (replicate 2) [0..axisCount-1]) (concat $ replicate ((length pressedAxisBools) `div` 2) [0,1]))) pressedAxisBools     
+    let buttonsBase = ["A", "B", "X", "Y", "L", "R", "SELECT", "START", "UP", "DOWN", "LEFT", "RIGHT"]
+    return $ (zippedButtonBools ++ zippedAxisBools)
+    
+sdlJoystickEventGen :: TChan EventT -> InternalButtonState -> UTCTime -> [Joystick] -> IO ()
+sdlJoystickEventGen channel internButtonState startTime joysticks = do
+    time <- getCurrentTime
+    let timeMillis = round (realToFrac ((diffUTCTime time startTime) * 1000) :: Float) :: Integer
+    zippedButtonBoolsLists <- (mapM (\(joystick,num) -> sdlGetJoystickButtonData joystick num) $ zip joysticks [0..])
+    zippedButtonBools <- foldM ((\acc item -> return (acc ++ item))) [] zippedButtonBoolsLists
+    let newInternButtonState = InternalButtonState {pressedBI=pK, heldBI=hK, releasedBI=rK} 
                                 where (pK2, rK2) = foldr (\key (accP, accR) -> case key of {(k,True) -> ((k,timeMillis) : accP, accR); 
                                                                                             (k,False) -> (accP, (k,timeMillis) : accR)}) ([],[]) zippedButtonBools
                                       pKolds = map (\(key,time) -> key) (pressedBI internButtonState)
@@ -101,7 +114,7 @@ sdlJoystickEventGen channel internButtonState startTime joystick = do
     
     atomically $ writeTChan channel $ EventT "SDL_JOYSTICK_DATA" newButtonState
     threadDelay 33000
-    unless quit (sdlJoystickEventGen channel newInternButtonState startTime joystick)
+    unless quit (sdlJoystickEventGen channel newInternButtonState startTime joysticks)
     
     
 sdlKeyEventProvider :: TChan EventT -> IO ()
