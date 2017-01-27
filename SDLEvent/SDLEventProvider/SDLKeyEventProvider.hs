@@ -15,7 +15,6 @@ import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import Control.Monad.State
 import Control.Monad.Reader
-import Control.Monad.Loops
 import Control.Monad
 
 import Data.Time.Clock
