@@ -6,9 +6,8 @@ import SDLEventProvider.SDLKeyEventProvider
 import Control.Monad.State
 import Control.Monad.Reader
 
-import Debug.Trace
-
 import Data.Maybe
+import Data.Typeable
 import qualified Network.Socket as Sock
 
 type KeyStatus = (String, String, Integer) -- Represents the tuple (KeyStatusString, KeyNameString, Time) 
@@ -35,20 +34,25 @@ move _ _ (x,y) = (x,y)
 toFrame :: (Int, Int) -> (Int, Int) -> ListFrame
 toFrame (xdim, ydim) (x', y') = ListFrame $ map (\y -> map (\x -> if x == x' && y == y' then Pixel 0xff 0xff 0xff else Pixel 0 0 0) [0 .. xdim - 1]) [0 .. ydim - 1]
 
-getKeyDataTuples keyState = (map (\(k,t) -> ("Pressed",k,t)) (pressed $ keyState)) ++ (map (\(k,d) -> ("Held",k,d)) (held $ keyState)) ++ (map (\(k,t) -> ("Released",k,t)) (released $ keyState))
-getButtonDataTuples buttonState = (map (\(k,t) -> ("Pressed",k,t)) (pressedB $ buttonState)) ++ (map (\(k,d) -> ("Held",k,d)) (heldB $ buttonState)) ++ (map (\(k,t) -> ("Released",k,t)) (releasedB $ buttonState))
+getKeyDataTuples (Just keyState) = (map (\(k,t) -> ("Pressed",k,t)) (pressed $ keyState)) ++ (map (\(k,d) -> ("Held",k,d)) (held $ keyState)) ++ (map (\(k,t) -> ("Released",k,t)) (released $ keyState))
+getKeyDataTuples _ = []                 
+getButtonDataTuples (Just buttonState) = (map (\(k,t) -> ("Pressed",k,t)) (pressedB $ buttonState)) ++ (map (\(k,d) -> ("Held",k,d)) (heldB $ buttonState)) ++ (map (\(k,t) -> ("Released",k,t)) (releasedB $ buttonState))
+getButtonDataTuples _ = []     
 
-eventTest :: [Event String] -> (Int, Int) -> (ListFrame, (Int, Int))
-eventTest events state = (toFrame dim state', state')
-  where state' = foldl (\acc (Event mod ev) -> case mod of
-                                        "SDL_KEY_DATA" -> foldl (\accState key -> move dim key accState) acc (getKeyDataTuples (read ev :: KeyState))
-                                        "SDL_JOYSTICK_DATA" -> foldl (\accState key -> move dim key accState) acc (getButtonDataTuples (read ev :: ButtonState))
+eventTest :: [EventT] -> MateMonad ListFrame (Int,Int) IO ListFrame
+eventTest events = do 
+        state <- get
+        let state' = foldl (\acc (EventT mod ev) -> case mod of
+                                        "SDL_KEY_DATA" -> foldl (\accState key -> move dim key accState) acc (getKeyDataTuples ((cast ev) :: Maybe KeyState))
+                                        "SDL_JOYSTICK_DATA" -> foldl (\accState key -> move dim key accState) acc (getButtonDataTuples ((cast ev) :: Maybe ButtonState))
                                         otherwise -> acc) state events
+        put $ state'
+        return (toFrame dim state')
   
 dim :: (Int, Int)
 dim = (30, 12)
-
+  
 main :: IO ()
 main = do
     showSDLControlWindow
-    Sock.withSocketsDo $ runMate (Config (fromJust $ parseAddress "127.0.0.1") 1337 dim (Just 33000) True [sdlKeyEventProvider, sdlJoystickEventProvider]) eventTest (0,0)
+    Sock.withSocketsDo $ runMateM (Config (fromJust $ parseAddress "127.0.0.1") 1337 dim (Just 33000) True [sdlKeyEventProvider, sdlJoystickEventProvider]) eventTest (0,0)
