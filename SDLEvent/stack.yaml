@@ -39,7 +39,7 @@ packages:
 - '.'
 - location:
     git: https://github.com/bigmac2k/HSMateLight.git
-    commit: e52b4e5a0817c81c52b1cfae86b90e255cb312b7
+    commit: 30b550a8dbfbdd40058634ae2623a6eb523ede51
   extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
